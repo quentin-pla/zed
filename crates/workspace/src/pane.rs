@@ -46,8 +46,8 @@ use std::{
 use theme_settings::ThemeSettings;
 use ui::{
     ContextMenu, ContextMenuEntry, ContextMenuItem, DecoratedIcon, IconButtonShape, IconDecoration,
-    IconDecorationKind, Indicator, PopoverMenu, PopoverMenuHandle, Tab, TabBar, TabPosition,
-    Tooltip, prelude::*, right_click_menu,
+    IconDecorationKind, Indicator, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, TabBar,
+    TabPosition, Tooltip, prelude::*, right_click_menu,
 };
 use util::{
     ResultExt, debug_panic, maybe, paths::PathStyle, serde::default_true, truncate_and_remove_front,
@@ -4509,7 +4509,47 @@ impl Render for Pane {
                                     },
                                 ));
                             if has_worktrees || !self.should_display_welcome_page {
-                                placeholder
+                                let focus_handle = self.focus_handle.clone();
+                                placeholder.child(
+                                    v_flex()
+                                        .my_auto()
+                                        .gap_2()
+                                        .child(empty_pane_shortcut(
+                                            "Command Palette",
+                                            IconName::Command,
+                                            &zed_actions::command_palette::Toggle,
+                                            &focus_handle,
+                                            cx,
+                                        ))
+                                        .child(empty_pane_shortcut(
+                                            "Project Panel",
+                                            IconName::FileTree,
+                                            &zed_actions::project_panel::ToggleFocus,
+                                            &focus_handle,
+                                            cx,
+                                        ))
+                                        .child(empty_pane_shortcut(
+                                            "Go to File",
+                                            IconName::MagnifyingGlass,
+                                            &ToggleFileFinder::default(),
+                                            &focus_handle,
+                                            cx,
+                                        ))
+                                        .child(empty_pane_shortcut(
+                                            "Recent Projects",
+                                            IconName::Clock,
+                                            &zed_actions::OpenRecent {
+                                                create_new_window: false,
+                                            },
+                                            &focus_handle,
+                                            cx,
+                                        ))
+                                        .child(
+                                            Label::new("Drop files here to open them")
+                                                .color(Color::Muted)
+                                                .mt_2(),
+                                        ),
+                                )
                             } else {
                                 if self.welcome_page.is_none() {
                                     let workspace = self.workspace.clone();
@@ -4889,6 +4929,30 @@ impl NavHistoryState {
             });
         }
     }
+}
+
+fn empty_pane_shortcut(
+    label: impl Into<SharedString>,
+    icon: IconName,
+    action: &dyn Action,
+    focus_handle: &FocusHandle,
+    cx: &App,
+) -> impl IntoElement {
+    h_flex()
+        .gap_3()
+        .child(
+            h_flex().w(rems(7.5)).child(
+                Icon::new(icon)
+                    .color(Color::Muted)
+                    .size(IconSize::Small),
+            ),
+        )
+        .child(Label::new(label).color(Color::Muted))
+        .child(
+            div()
+                .ml_auto()
+                .child(KeyBinding::for_action_in(action, focus_handle, cx).size(rems_from_px(12.))),
+        )
 }
 
 fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle) -> String {
