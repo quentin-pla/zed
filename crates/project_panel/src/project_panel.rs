@@ -269,6 +269,7 @@ impl DiagnosticCount {
 struct EntryDetails {
     filename: String,
     icon: Option<SharedString>,
+    chevron_icon: Option<SharedString>,
     path: Arc<RelPath>,
     depth: usize,
     kind: EntryKind,
@@ -5300,6 +5301,7 @@ impl ProjectPanel {
                 icon = FileIcons::get_icon(Path::new(&filename), cx);
             }
         }
+        let chevron_icon = details.chevron_icon.clone();
 
         let filename_text_color = details.filename_text_color;
         let diagnostic_severity = details.diagnostic_severity;
@@ -5811,6 +5813,13 @@ impl ProjectPanel {
                             )
                         },
                     )
+                    .when_some(chevron_icon.as_ref(), |this, chevron| {
+                        this.child(
+                            h_flex().child(
+                                Icon::from_path(chevron.to_string()).color(Color::Muted),
+                            ),
+                        )
+                    })
                     .child(if let Some(icon) = &icon {
                         if let Some((_, decoration_color)) =
                             entry_diagnostic_aware_icon_decoration_and_color(diagnostic_severity)
@@ -6172,19 +6181,23 @@ impl ProjectPanel {
             .unwrap_or(&[]);
         let is_expanded = expanded_entry_ids.binary_search(&entry.id).is_ok();
 
-        let icon = match entry.kind {
+        let (icon, chevron_icon) = match entry.kind {
             EntryKind::File => {
-                if show_file_icons {
+                let icon = if show_file_icons {
                     FileIcons::get_icon(entry.path.as_std_path(), cx)
                 } else {
                     None
-                }
+                };
+                (icon, None)
             }
             _ => {
+                let chevron = FileIcons::get_chevron_icon(is_expanded, cx);
                 if show_folder_icons {
-                    FileIcons::get_folder_icon(is_expanded, entry.path.as_std_path(), cx)
+                    let folder =
+                        FileIcons::get_folder_icon(is_expanded, entry.path.as_std_path(), cx);
+                    (folder, chevron)
                 } else {
-                    FileIcons::get_chevron_icon(is_expanded, cx)
+                    (chevron, None)
                 }
             }
         };
@@ -6236,6 +6249,7 @@ impl ProjectPanel {
         EntryDetails {
             filename,
             icon,
+            chevron_icon,
             path: entry.path.clone(),
             depth,
             kind: entry.kind,
