@@ -160,6 +160,7 @@ pub struct StatusBarSettings {
     pub cursor_position_button: bool,
     pub line_endings_button: bool,
     pub active_encoding_button: EncodingDisplayOptions,
+    pub show_threads_sidebar_button: bool,
 }
 
 impl Settings for StatusBarSettings {
@@ -172,6 +173,21 @@ impl Settings for StatusBarSettings {
             cursor_position_button: status_bar.cursor_position_button.unwrap(),
             line_endings_button: status_bar.line_endings_button.unwrap(),
             active_encoding_button: status_bar.active_encoding_button.unwrap(),
+            show_threads_sidebar_button: status_bar.show_threads_sidebar_button.unwrap_or(true),
+        }
+    }
+}
+
+#[derive(Deserialize, RegisterSetting)]
+pub struct ActivityBarSettings {
+    pub enabled: bool,
+}
+
+impl Settings for ActivityBarSettings {
+    fn from_settings(content: &settings::SettingsContent) -> Self {
+        let activity_bar = content.activity_bar.clone().unwrap_or_default();
+        ActivityBarSettings {
+            enabled: activity_bar.enabled.unwrap_or(false),
         }
     }
 }

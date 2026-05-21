@@ -1,4 +1,5 @@
 pub mod active_file_name;
+pub mod activity_bar;
 pub mod dock;
 pub mod history_manager;
 pub mod invalid_item_view;
@@ -152,12 +153,14 @@ use util::{
 };
 use uuid::Uuid;
 pub use workspace_settings::{
-    AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, FocusFollowsMouse,
-    RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings, WorkspaceSettings,
+    ActivityBarSettings, AutosaveSetting, BottomDockLayout, EncodingDisplayOptions,
+    FocusFollowsMouse, RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings,
+    WorkspaceSettings,
 };
 use zed_actions::{Spawn, feedback::FileBugReport, theme::ToggleMode};
 
-use crate::{dock::PanelSizeState, item::ItemBufferKind, notifications::NotificationId};
+use crate::activity_bar::ActivityBar;
+use crate::{dock::{PanelButtonsOrientation, PanelSizeState}, item::ItemBufferKind, notifications::NotificationId};
 use crate::{
     persistence::{
         SerializedAxis,
@@ -1361,6 +1364,7 @@ pub struct Workspace {
     last_active_center_pane: Option<WeakEntity<Pane>>,
     last_active_view_id: Option<proto::ViewId>,
     status_bar: Entity<StatusBar>,
+    activity_bar: Option<Entity<ActivityBar>>,
     pub(crate) modal_layer: Entity<ModalLayer>,
     toast_layer: Entity<ToastLayer>,
     titlebar_item: Option<AnyView>,
@@ -1710,19 +1714,45 @@ impl Workspace {
         let left_dock = Dock::new(DockPosition::Left, modal_layer.clone(), window, cx);
         let bottom_dock = Dock::new(DockPosition::Bottom, modal_layer.clone(), window, cx);
         let right_dock = Dock::new(DockPosition::Right, modal_layer.clone(), window, cx);
-        let left_dock_buttons = cx.new(|cx| PanelButtons::new(left_dock.clone(), cx));
-        let bottom_dock_buttons = cx.new(|cx| PanelButtons::new(bottom_dock.clone(), cx));
-        let right_dock_buttons = cx.new(|cx| PanelButtons::new(right_dock.clone(), cx));
+
+        let activity_bar_enabled = ActivityBarSettings::get_global(cx).enabled;
+        let panel_button_orientation = if activity_bar_enabled {
+            PanelButtonsOrientation::Vertical
+        } else {
+            PanelButtonsOrientation::Horizontal
+        };
+        let left_dock_buttons = cx.new(|cx| {
+            PanelButtons::new(left_dock.clone(), panel_button_orientation, cx)
+        });
+        let bottom_dock_buttons = cx.new(|cx| {
+            PanelButtons::new(bottom_dock.clone(), panel_button_orientation, cx)
+        });
+        let right_dock_buttons = cx.new(|cx| {
+            PanelButtons::new(right_dock.clone(), panel_button_orientation, cx)
+        });
         let multi_workspace = window
             .root::<MultiWorkspace>()
             .flatten()
             .map(|mw| mw.downgrade());
+        let activity_bar = if activity_bar_enabled {
+            Some(cx.new(|_| {
+                ActivityBar::new(
+                    left_dock_buttons.clone(),
+                    bottom_dock_buttons.clone(),
+                    right_dock_buttons.clone(),
+                )
+            }))
+        } else {
+            None
+        };
         let status_bar = cx.new(|cx| {
             let mut status_bar =
                 StatusBar::new(&center_pane.clone(), multi_workspace.clone(), window, cx);
-            status_bar.add_left_item(left_dock_buttons, window, cx);
-            status_bar.add_right_item(right_dock_buttons, window, cx);
-            status_bar.add_right_item(bottom_dock_buttons, window, cx);
+            if !activity_bar_enabled {
+                status_bar.add_left_item(left_dock_buttons, window, cx);
+                status_bar.add_right_item(right_dock_buttons, window, cx);
+                status_bar.add_right_item(bottom_dock_buttons, window, cx);
+            }
             status_bar
         });
 
@@ -1801,6 +1831,7 @@ impl Workspace {
             last_active_center_pane: Some(center_pane.downgrade()),
             last_active_view_id: None,
             status_bar,
+            activity_bar,
             modal_layer,
             toast_layer,
             titlebar_item: None,
@@ -8460,8 +8491,15 @@ impl Render for Workspace {
                     .relative()
                     .flex_1()
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .when_some(self.activity_bar.clone(), |parent, ab| parent.child(ab))
                     .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .overflow_hidden()
+                            .child(
                         div()
                             .id("workspace")
                             .bg(colors.background)
@@ -8822,7 +8860,8 @@ impl Render for Workspace {
                     )
                     .when(self.status_bar_visible(cx), |parent| {
                         parent.child(self.status_bar.clone())
-                    })
+                    }),
+                    )
                     .child(self.toast_layer.clone()),
             )
     }

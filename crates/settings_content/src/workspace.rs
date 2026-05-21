@@ -488,6 +488,20 @@ pub struct StatusBarSettingsContent {
     ///
     /// Default: non_utf8
     pub active_encoding_button: Option<EncodingDisplayOptions>,
+    /// Whether to show the threads sidebar toggle button in the status bar.
+    ///
+    /// Default: true
+    pub show_threads_sidebar_button: Option<bool>,
+}
+
+#[with_fallible_options]
+#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq, Eq)]
+pub struct ActivityBarSettingsContent {
+    /// Whether to show a vertical activity bar on the far-left edge of the window
+    /// hosting the dock panel toggle icons (instead of the bottom status bar).
+    ///
+    /// Default: false
+    pub enabled: Option<bool>,
 }
 
 #[derive(

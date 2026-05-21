@@ -286,6 +286,13 @@ impl Focusable for Dock {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum PanelButtonsOrientation {
+    #[default]
+    Horizontal,
+    Vertical,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DockPosition {
     Left,
@@ -355,6 +362,7 @@ struct PanelEntry {
 
 pub struct PanelButtons {
     dock: Entity<Dock>,
+    orientation: PanelButtonsOrientation,
     _settings_subscription: Subscription,
 }
 
@@ -485,6 +493,10 @@ impl Dock {
         self.panel_entries
             .iter()
             .find_map(|entry| entry.panel.to_any().downcast().ok())
+    }
+
+    pub fn panel_entries_is_empty(&self) -> bool {
+        self.panel_entries.is_empty()
     }
 
     pub fn panel_index_for_type<T: Panel>(&self) -> Option<usize> {
@@ -1193,13 +1205,22 @@ impl Render for Dock {
 }
 
 impl PanelButtons {
-    pub fn new(dock: Entity<Dock>, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        dock: Entity<Dock>,
+        orientation: PanelButtonsOrientation,
+        cx: &mut Context<Self>,
+    ) -> Self {
         cx.observe(&dock, |_, _, cx| cx.notify()).detach();
         let settings_subscription = cx.observe_global::<SettingsStore>(|_, cx| cx.notify());
         Self {
             dock,
+            orientation,
             _settings_subscription: settings_subscription,
         }
+    }
+
+    pub fn dock_entity(&self) -> Entity<Dock> {
+        self.dock.clone()
     }
 }
 
@@ -1209,6 +1230,11 @@ impl Render for PanelButtons {
         let active_index = dock.active_panel_index;
         let is_open = dock.is_open;
         let dock_position = dock.position;
+        let icon_size = match self.orientation {
+            PanelButtonsOrientation::Vertical => IconSize::Custom(rems_from_px(21.)),
+            PanelButtonsOrientation::Horizontal => IconSize::Small,
+        };
+        let is_vertical = matches!(self.orientation, PanelButtonsOrientation::Vertical);
 
         let (menu_anchor, menu_attach) = match dock.position {
             DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
@@ -1350,8 +1376,13 @@ impl Render for PanelButtons {
                             // Include active state in element ID to invalidate the cached
                             // tooltip when panel state changes (e.g., via keyboard shortcut)
                             let button = IconButton::new((name, is_active_button as u64), icon)
-                                .icon_size(IconSize::Small)
+                                .icon_size(icon_size)
                                 .toggle_state(is_active_button)
+                                .when(is_vertical, |this| {
+                                    this.size(ui::ButtonSize::Large)
+                                        .full_width()
+                                        .height(rems_from_px(48.).into())
+                                })
                                 .on_click({
                                     let action = action.boxed_clone();
                                     move |_, window, cx| {
@@ -1365,7 +1396,11 @@ impl Render for PanelButtons {
                                     })
                                 });
 
-                            div().relative().child(button).when_some(
+                            div()
+                                .relative()
+                                .when(is_vertical, |this| this.w_full())
+                                .child(button)
+                                .when_some(
                                 icon_label
                                     .clone()
                                     .filter(|_| !is_active_button)
@@ -1377,24 +1412,32 @@ impl Render for PanelButtons {
             })
             .collect();
 
-        if dock_position == DockPosition::Right {
-            buttons.reverse();
+        match self.orientation {
+            PanelButtonsOrientation::Horizontal => {
+                if dock_position == DockPosition::Right {
+                    buttons.reverse();
+                }
+
+                let has_buttons = !buttons.is_empty();
+
+                h_flex()
+                    .gap_1()
+                    .when(
+                        has_buttons
+                            && (dock.position == DockPosition::Bottom
+                                || dock.position == DockPosition::Right),
+                        |this| this.child(Divider::vertical().color(DividerColor::Border)),
+                    )
+                    .children(buttons)
+                    .when(has_buttons && dock.position == DockPosition::Left, |this| {
+                        this.child(Divider::vertical().color(DividerColor::Border))
+                    })
+                    .into_any_element()
+            }
+            PanelButtonsOrientation::Vertical => {
+                v_flex().children(buttons).into_any_element()
+            }
         }
-
-        let has_buttons = !buttons.is_empty();
-
-        h_flex()
-            .gap_1()
-            .when(
-                has_buttons
-                    && (dock.position == DockPosition::Bottom
-                        || dock.position == DockPosition::Right),
-                |this| this.child(Divider::vertical().color(DividerColor::Border)),
-            )
-            .children(buttons)
-            .when(has_buttons && dock.position == DockPosition::Left, |this| {
-                this.child(Divider::vertical().color(DividerColor::Border))
-            })
     }
 }
 

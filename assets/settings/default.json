@@ -1724,6 +1724,12 @@
     // 2. hour24
     "hour_format": "hour12",
   },
+  // Activity bar-related settings (vertical bar on the far-left edge of the
+  // window hosting the dock panel toggle icons instead of the bottom status bar).
+  "activity_bar": {
+    // Whether to show the vertical activity bar.
+    "enabled": false,
+  },
   // Status bar-related settings.
   "status_bar": {
     // Whether to show the status bar.
@@ -1738,6 +1744,8 @@
     "line_endings_button": false,
     // Control when to show the active encoding in the status bar.
     "active_encoding_button": "non_utf8",
+    // Whether to show the threads sidebar toggle button in the status bar.
+    "show_threads_sidebar_button": true,
   },
   // Settings specific to the terminal
   "terminal": {

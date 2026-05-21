@@ -172,6 +172,7 @@ impl VsCodeSettings {
 
     pub fn settings_content(&self) -> SettingsContent {
         SettingsContent {
+            activity_bar: None,
             agent: self.agent_settings_content(),
             agent_servers: None,
             audio: None,
@@ -790,6 +791,7 @@ impl VsCodeSettings {
             cursor_position_button: None,
             line_endings_button: None,
             active_encoding_button: None,
+            show_threads_sidebar_button: None,
         })
     }
 

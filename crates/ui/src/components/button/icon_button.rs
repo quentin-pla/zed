@@ -96,6 +96,11 @@ impl IconButton {
 
         self
     }
+
+    pub fn height(mut self, height: gpui::DefiniteLength) -> Self {
+        self.base = self.base.height(height);
+        self
+    }
 }
 
 impl Disableable for IconButton {
