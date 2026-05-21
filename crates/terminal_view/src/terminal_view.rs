@@ -975,24 +975,6 @@ impl TerminalView {
         self.terminal = terminal;
     }
 
-    fn rerun_button(task: &TaskState) -> Option<IconButton> {
-        if !task.spawned_task.show_rerun {
-            return None;
-        }
-
-        let task_id = task.spawned_task.id.clone();
-        Some(
-            IconButton::new("rerun-icon", IconName::Rerun)
-                .icon_size(IconSize::Small)
-                .size(ButtonSize::Compact)
-                .icon_color(Color::Default)
-                .shape(ui::IconButtonShape::Square)
-                .tooltip(move |_window, cx| Tooltip::for_action("Rerun task", &RerunTask, cx))
-                .on_click(move |_, window, cx| {
-                    window.dispatch_action(Box::new(terminal_rerun_override(&task_id)), cx);
-                }),
-        )
-    }
 }
 
 fn terminal_rerun_override(task: &TaskId) -> zed_actions::Rerun {
@@ -1357,29 +1339,19 @@ impl Item for TerminalView {
             .cloned()
             .unwrap_or_else(|| terminal.title(true));
 
-        let (icon, icon_color, rerun_button) = match terminal.task() {
+        let (icon, icon_color) = match terminal.task() {
             Some(terminal_task) => match &terminal_task.status {
-                TaskStatus::Running => (
-                    IconName::PlayFilled,
-                    Color::Disabled,
-                    TerminalView::rerun_button(terminal_task),
-                ),
-                TaskStatus::Unknown => (
-                    IconName::Warning,
-                    Color::Warning,
-                    TerminalView::rerun_button(terminal_task),
-                ),
+                TaskStatus::Running => (IconName::PlayFilled, Color::Disabled),
+                TaskStatus::Unknown => (IconName::Warning, Color::Warning),
                 TaskStatus::Completed { success } => {
-                    let rerun_button = TerminalView::rerun_button(terminal_task);
-
                     if *success {
-                        (IconName::Check, Color::Success, rerun_button)
+                        (IconName::Check, Color::Success)
                     } else {
-                        (IconName::XCircle, Color::Error, rerun_button)
+                        (IconName::XCircle, Color::Error)
                     }
                 }
             },
-            None => (IconName::Terminal, Color::Muted, None),
+            None => (IconName::Terminal, Color::Muted),
         };
 
         let self_handle = self.self_handle.clone();
@@ -1397,21 +1369,7 @@ impl Item for TerminalView {
             .child(
                 h_flex()
                     .group("term-tab-icon")
-                    .child(
-                        div()
-                            .when(rerun_button.is_some(), |this| {
-                                this.hover(|style| style.invisible().w_0())
-                            })
-                            .child(Icon::new(icon).color(icon_color)),
-                    )
-                    .when_some(rerun_button, |this, rerun_button| {
-                        this.child(
-                            div()
-                                .absolute()
-                                .visible_on_hover("term-tab-icon")
-                                .child(rerun_button),
-                        )
-                    }),
+                    .child(div().child(Icon::new(icon).color(icon_color))),
             )
             .child(
                 div()

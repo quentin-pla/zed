@@ -514,6 +514,15 @@ pub fn local_vscode_tasks_file_relative_path() -> &'static RelPath {
     *CACHED
 }
 
+/// Returns the relative path to a `run_configurations.json` file within a project.
+/// Stores Webstorm-style UI state (active label, pinned order) for the titlebar
+/// run-configurations dropdown. Script definitions themselves live in `tasks.json`.
+pub fn local_run_configurations_file_relative_path() -> &'static RelPath {
+    static CACHED: LazyLock<&'static RelPath> =
+        LazyLock::new(|| RelPath::unix(".zed/run_configurations.json").unwrap());
+    *CACHED
+}
+
 pub fn debug_task_file_name() -> &'static str {
     "debug.json"
 }

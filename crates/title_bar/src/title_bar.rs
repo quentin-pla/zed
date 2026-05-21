@@ -2,11 +2,13 @@ mod application_menu;
 pub mod collab;
 mod onboarding_banner;
 mod plan_chip;
+mod run_configurations;
 mod title_bar_settings;
 mod update_version;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
 use crate::plan_chip::PlanChip;
+use crate::run_configurations::RunConfigurations;
 use agent_settings::{AgentSettings, WindowLayout};
 use arrayvec::ArrayVec;
 use git_ui::worktree_picker::WorktreePicker;
@@ -99,6 +101,25 @@ pub fn init(cx: &mut App) {
             }
         });
 
+        workspace.register_action(
+            |workspace,
+             action: &zed_actions::ToggleRunConfigurationPin,
+             _window,
+             cx| {
+                if let Some(titlebar) = workspace
+                    .titlebar_item()
+                    .and_then(|item| item.downcast::<TitleBar>().ok())
+                {
+                    titlebar.update(cx, |titlebar, cx| {
+                        let label = SharedString::from(action.label.clone());
+                        titlebar
+                            .run_configurations
+                            .update(cx, |rc, cx| rc.toggle_pin(label, cx));
+                    });
+                }
+            },
+        );
+
         #[cfg(not(target_os = "macos"))]
         workspace.register_action(|workspace, action: &OpenApplicationMenu, window, cx| {
             if let Some(titlebar) = workspace
@@ -160,7 +181,9 @@ pub struct TitleBar {
     banner: Option<Entity<OnboardingBanner>>,
     update_version: Entity<UpdateVersion>,
     screen_share_popover_handle: PopoverMenuHandle<ContextMenu>,
+    run_config_popover_handle: PopoverMenuHandle<ContextMenu>,
     _diagnostics_subscription: Option<gpui::Subscription>,
+    run_configurations: Entity<RunConfigurations>,
 }
 
 impl Render for TitleBar {
@@ -315,6 +338,7 @@ impl Render for TitleBar {
                 })
                 .gap_1()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .children(self.render_run_controls(window, cx))
                 .children(self.render_call_controls(window, cx))
                 .children(self.render_connection_status(status, cx))
                 .child(self.update_version.clone())
@@ -446,6 +470,9 @@ impl TitleBar {
             }));
         }
 
+        let run_configurations = cx.new(|cx| RunConfigurations::new(workspace, cx));
+        subscriptions.push(cx.observe(&run_configurations, |_, _, cx| cx.notify()));
+
         let update_version = cx.new(|cx| UpdateVersion::new(cx));
         let platform_titlebar = cx.new(|cx| {
             let mut titlebar = PlatformTitleBar::new(id, cx);
@@ -484,7 +511,9 @@ impl TitleBar {
             banner,
             update_version,
             screen_share_popover_handle: PopoverMenuHandle::default(),
+            run_config_popover_handle: PopoverMenuHandle::default(),
             _diagnostics_subscription: None,
+            run_configurations,
         };
 
         this.observe_diagnostics(cx);
@@ -1056,6 +1085,232 @@ impl TitleBar {
                 })
                 .into_any_element(),
         )
+    }
+
+    fn render_run_controls(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let run_configs = self.run_configurations.clone();
+        let active_label = run_configs.read(cx).active_label().cloned();
+        let active_running = active_label.as_ref().map(|label| {
+            let label = label.clone();
+            run_configs.update(cx, |this, cx| this.is_running(label.as_ref(), cx))
+        }).unwrap_or(false);
+
+        let mut out: Vec<AnyElement> = Vec::new();
+
+        let dropdown_label: SharedString = active_label
+            .clone()
+            .map(|l| SharedString::from(l.to_string()))
+            .unwrap_or_else(|| "Add Configuration".into());
+
+        let menu_run_configs = run_configs.clone();
+        let popover_handle = self.run_config_popover_handle.clone();
+        let popover = PopoverMenu::new("run-config-popover")
+            .with_handle(self.run_config_popover_handle.clone())
+            .menu(move |window, cx| {
+                let run_configs = menu_run_configs.clone();
+                // Inventory doesn't emit notifications when templates change,
+                // so our cached `templates` Vec may be stale (or empty if it
+                // ran before tasks.json was parsed). Refresh on every open.
+                run_configs.update(cx, |this, cx| this.reload_templates(cx));
+                let pinned = run_configs.read(cx).resolved_pinned();
+                // Fallback: when no task is pinned, surface the first 10 task
+                // templates found in `.zed/tasks.json` (and any other
+                // worktree-level sources) so the dropdown is useful out of
+                // the box. Pin a row via the Spawn-Task picker to override.
+                let entries: Vec<(_, _)> = if pinned.is_empty() {
+                    run_configs
+                        .read(cx)
+                        .all_templates()
+                        .iter()
+                        .take(10)
+                        .cloned()
+                        .collect()
+                } else {
+                    pinned
+                };
+                Some(ContextMenu::build(window, cx, |mut menu, _window, cx| {
+                    if entries.is_empty() {
+                        menu = menu.entry("No configurations yet", None, |_, _| {});
+                    } else {
+                        for (_, template) in entries {
+                            let label = SharedString::from(template.label.clone());
+                            let label_str = label.clone();
+                            let run_configs_for_play = run_configs.clone();
+                            let label_for_play = label.clone();
+                            let running = run_configs.update(cx, |this, cx| {
+                                this.is_running(label.as_ref(), cx)
+                            });
+                            let run_configs_for_entry = run_configs.clone();
+                            let label_for_entry = label.clone();
+                            let popover_handle_for_entry = popover_handle.clone();
+                            menu = menu.custom_entry(
+                                move |_window, _cx| {
+                                    h_flex()
+                                        .w_full()
+                                        .gap_2()
+                                        .justify_between()
+                                        .child(
+                                            h_flex()
+                                                .gap_2()
+                                                .child(Label::new(label_str.clone())),
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .gap_1()
+                                                .child(
+                                                    IconButton::new(
+                                                        SharedString::from(format!("run-config-play-{label_str}")),
+                                                        if running {
+                                                            IconName::Stop
+                                                        } else {
+                                                            IconName::PlayFilled
+                                                        },
+                                                    )
+                                                    .icon_size(IconSize::Small)
+                                                    .on_click({
+                                                        let run_configs = run_configs_for_play.clone();
+                                                        let label = label_for_play.clone();
+                                                        let handle = popover_handle_for_entry.clone();
+                                                        move |event: &gpui::ClickEvent, window, cx| {
+                                                            // Suppress the surrounding ListItem's
+                                                            // on_click (which would emit DismissEvent
+                                                            // and close the popover). Both calls are
+                                                            // needed: stop_propagation prevents event
+                                                            // bubbling, prevent_default prevents
+                                                            // GPUI's default click action handlers.
+                                                            window.prevent_default();
+                                                            cx.stop_propagation();
+                                                            let keep_open = event.modifiers().platform;
+                                                            run_configs.update(cx, |this, cx| {
+                                                                if this.is_running(label.as_ref(), cx) {
+                                                                    this.stop_label(label.as_ref(), cx);
+                                                                } else {
+                                                                    // When the popover is being kept
+                                                                    // open (Cmd-held), spawn the task
+                                                                    // without stealing focus —
+                                                                    // otherwise focus shifts to the
+                                                                    // new terminal pane and the
+                                                                    // popover dismisses.
+                                                                    this.start_label_with(
+                                                                        label.as_ref(),
+                                                                        keep_open,
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                }
+                                                            });
+                                                            // Without Cmd-held: dismiss the popover so
+                                                            // the next time the user opens it, fresh
+                                                            // `is_running` checks decide the icon.
+                                                            // With Cmd-held: keep it open AND rebuild
+                                                            // the menu in-place so the row's icon
+                                                            // flips between Play and Stop without
+                                                            // the user having to reopen.
+                                                            //
+                                                            // The kill side flips quickly (status →
+                                                            // Completed is sync-enough after the
+                                                            // poll), but for spawn the new terminal
+                                                            // takes ~100 ms to register. We rebuild
+                                                            // immediately AND schedule a deferred
+                                                            // rebuild ~150 ms later to catch the
+                                                            // spawned-task case.
+                                                            if !keep_open {
+                                                                handle.hide(cx);
+                                                            } else {
+                                                                handle.rebuild(window, cx);
+                                                                let handle = handle.clone();
+                                                                window
+                                                                    .spawn(cx, async move |cx| {
+                                                                        cx.background_executor()
+                                                                            .timer(std::time::Duration::from_millis(150))
+                                                                            .await;
+                                                                        cx.update(|window, cx| {
+                                                                            handle.rebuild(window, cx);
+                                                                        })
+                                                                        .ok();
+                                                                    })
+                                                                    .detach();
+                                                            }
+                                                        }
+                                                    }),
+                                                ),
+                                        )
+                                        .into_any_element()
+                                },
+                                {
+                                    let run_configs = run_configs_for_entry.clone();
+                                    let label = label_for_entry.clone();
+                                    move |_window, cx| {
+                                        run_configs.update(cx, |this, cx| {
+                                            this.set_active(label.clone(), cx);
+                                        });
+                                    }
+                                },
+                            );
+                        }
+                    }
+                    menu = menu.separator();
+                    menu = menu.action("Spawn Task…", zed_actions::Spawn::modal().boxed_clone());
+                    menu
+                }))
+            })
+            .trigger_with_tooltip(
+                ui::Button::new("run-config-trigger", dropdown_label.clone())
+                    .style(ButtonStyle::Subtle)
+                    .label_size(LabelSize::Small),
+                move |_window, cx| Tooltip::simple("Run configurations", cx),
+            )
+            .anchor(Anchor::TopRight);
+
+        out.push(popover.into_any_element());
+
+        if let Some(active_label_val) = active_label.clone() {
+            let run_configs_play = run_configs.clone();
+            let label_for_play = active_label_val.clone();
+            out.push(
+                IconButton::new(
+                    "run-config-active-play",
+                    if active_running {
+                        IconName::Stop
+                    } else {
+                        IconName::PlayFilled
+                    },
+                )
+                .icon_size(IconSize::Small)
+                .tooltip(move |_, cx| {
+                    Tooltip::simple(if active_running { "Stop" } else { "Run" }, cx)
+                })
+                .on_click(move |_event, window, cx| {
+                    run_configs_play.update(cx, |this, cx| {
+                        if this.is_running(label_for_play.as_ref(), cx) {
+                            this.stop_label(label_for_play.as_ref(), cx);
+                        } else {
+                            this.start_label(label_for_play.as_ref(), window, cx);
+                        }
+                    });
+                })
+                .into_any_element(),
+            );
+
+            out.push(
+                IconButton::new("run-config-debug", IconName::Debug)
+                    .icon_size(IconSize::Small)
+                    .tooltip(|_, cx| Tooltip::simple("Open debug tasks", cx))
+                    .on_click(|_event, window, cx| {
+                        window.dispatch_action(
+                            zed_actions::OpenProjectDebugTasks.boxed_clone(),
+                            cx,
+                        );
+                    })
+                    .into_any_element(),
+            );
+        }
+
+        out
     }
 
     fn window_activation_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {

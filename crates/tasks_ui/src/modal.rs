@@ -523,9 +523,41 @@ impl PickerDelegate for TasksModalDelegate {
             ListItem::new(format!("tasks-modal-{ix}"))
                 .inset(true)
                 .start_slot::<IconWithIndicator>(icon)
-                .end_slot::<AnyElement>(
+                .end_slot::<AnyElement>({
+                    let label_for_pin = template.label.clone();
+                    let is_pinned = cx
+                        .try_global::<zed_actions::PinnedRunConfigurations>()
+                        .is_some_and(|p| p.contains(&label_for_pin));
+                    let pin_icon = if is_pinned {
+                        IconName::Unpin
+                    } else {
+                        IconName::Pin
+                    };
+                    let pin_tooltip = if is_pinned {
+                        "Unpin from run-configurations dropdown"
+                    } else {
+                        "Pin in run-configurations dropdown"
+                    };
                     h_flex()
                         .gap_1()
+                        .child(
+                            IconButton::new("pin-run-config", pin_icon)
+                                .shape(IconButtonShape::Square)
+                                .icon_color(if is_pinned { Color::Accent } else { Color::Muted })
+                                .size(ButtonSize::None)
+                                .icon_size(IconSize::XSmall)
+                                .on_click(cx.listener(move |_picker, _event, window, cx| {
+                                    cx.stop_propagation();
+                                    window.prevent_default();
+                                    window.dispatch_action(
+                                        Box::new(zed_actions::ToggleRunConfigurationPin {
+                                            label: label_for_pin.clone(),
+                                        }),
+                                        cx,
+                                    );
+                                }))
+                                .tooltip(move |_, cx| Tooltip::simple(pin_tooltip, cx)),
+                        )
                         .child(Label::new(truncate_and_trailoff(
                             &template
                                 .tags
@@ -537,8 +569,8 @@ impl PickerDelegate for TasksModalDelegate {
                         )))
                         .flex_none()
                         .child(history_run_icon.unwrap())
-                        .into_any_element(),
-                )
+                        .into_any_element()
+                })
                 .spacing(ListItemSpacing::Sparse)
                 .when_some(tooltip_label, |list_item, item_label| {
                     list_item.tooltip(move |_, _| item_label.clone())

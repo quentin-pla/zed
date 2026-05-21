@@ -702,7 +702,7 @@ impl Inventory {
         self.scenarios_from_settings.worktree_scenarios(worktree)
     }
 
-    fn worktree_templates_from_settings(
+    pub fn worktree_templates_from_settings(
         &self,
         worktree: WorktreeId,
     ) -> impl '_ + Iterator<Item = (TaskSourceKind, TaskTemplate)> {

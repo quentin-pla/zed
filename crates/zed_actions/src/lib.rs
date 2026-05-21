@@ -28,6 +28,32 @@ pub struct OpenZedUrl {
     pub url: String,
 }
 
+/// Toggle whether the given task label is pinned in the Webstorm-style
+/// run-configurations dropdown in the titlebar. Dispatched from the
+/// Spawn-Task picker's per-row pin button.
+#[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
+#[action(namespace = zed)]
+#[serde(deny_unknown_fields)]
+pub struct ToggleRunConfigurationPin {
+    pub label: String,
+}
+
+/// App-level global mirroring the set of pinned task labels owned by the
+/// titlebar's `RunConfigurations`. Cross-crate reads (e.g. tasks_ui's
+/// Spawn-Task picker swapping its pin icon to Unpin for already-pinned rows)
+/// pull this via `cx.try_global::<PinnedRunConfigurations>()`. Title_bar
+/// keeps it in sync on every pin / load.
+#[derive(Default, Clone, Debug)]
+pub struct PinnedRunConfigurations(pub std::collections::HashSet<String>);
+
+impl gpui::Global for PinnedRunConfigurations {}
+
+impl PinnedRunConfigurations {
+    pub fn contains(&self, label: &str) -> bool {
+        self.0.contains(label)
+    }
+}
+
 /// Opens the keymap to either add a keybinding or change an existing one
 #[derive(PartialEq, Clone, Default, Action, JsonSchema, Serialize, Deserialize)]
 #[action(namespace = zed, no_json, no_register)]

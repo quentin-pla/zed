@@ -20,7 +20,7 @@ use project::{Fs, Project};
 
 use settings::{Settings, TerminalDockPosition};
 use task::{RevealStrategy, RevealTarget, Shell, ShellBuilder, SpawnInTerminal, TaskId};
-use terminal::{Terminal, terminal_settings::TerminalSettings};
+use terminal::{Clear, Terminal, terminal_settings::TerminalSettings};
 use ui::{
     ButtonLike, Clickable, ContextMenu, FluentBuilder, PopoverMenu, SplitButton, Toggleable,
     Tooltip, prelude::*,
@@ -151,6 +151,95 @@ impl TerminalPanel {
                 {
                     return (None, None);
                 }
+
+                let task_left_children: Option<AnyElement> = pane
+                    .active_item()
+                    .and_then(|item| item.downcast::<TerminalView>())
+                    .and_then(|terminal_view| {
+                        let terminal = terminal_view.read(cx).terminal().clone();
+                        let (task_id, is_running) = {
+                            let term = terminal.read(cx);
+                            let task = term.task()?;
+                            (
+                                task.spawned_task.id.clone(),
+                                task.status == terminal::TaskStatus::Running,
+                            )
+                        };
+                        let terminal_for_stop = terminal.clone();
+                        let toggle_button = if is_running {
+                            IconButton::new("task-toggle", IconName::Stop)
+                                .icon_size(IconSize::Small)
+                                .tooltip(|_, cx| Tooltip::simple("Stop task", cx))
+                                .on_click({
+                                    let terminal_for_notify = terminal_for_stop.clone();
+                                    move |_, _window, cx| {
+                                        terminal_for_stop.update(cx, |t, _| {
+                                            // Clear scrollback so only the
+                                            // "Task terminated" banner + command
+                                            // line remain after the kill.
+                                            t.clear();
+                                            t.kill_active_task();
+                                        });
+                                        // Child exit is async (~100 ms). Pulse
+                                        // `cx.notify()` on the Terminal entity
+                                        // a few times so its observers
+                                        // (TerminalView → Pane) repaint and the
+                                        // tab-bar toggle flips from Stop to
+                                        // Play once `task.status` flips to
+                                        // Completed.
+                                        let terminal_weak = terminal_for_notify.downgrade();
+                                        cx.spawn(async move |cx| {
+                                            for _ in 0..30 {
+                                                cx.background_executor()
+                                                    .timer(Duration::from_millis(100))
+                                                    .await;
+                                                let alive = terminal_weak
+                                                    .update(cx, |_, cx| cx.notify())
+                                                    .is_ok();
+                                                if !alive {
+                                                    break;
+                                                }
+                                            }
+                                        })
+                                        .detach();
+                                    }
+                                })
+                        } else {
+                            IconButton::new("task-toggle", IconName::PlayFilled)
+                                .icon_size(IconSize::Small)
+                                .tooltip(|_, cx| Tooltip::simple("Run task", cx))
+                                .on_click({
+                                    let task_id = task_id.clone();
+                                    move |_, window, cx| {
+                                        window.dispatch_action(
+                                            Box::new(zed_actions::Rerun {
+                                                task_id: Some(task_id.0.clone()),
+                                                allow_concurrent_runs: Some(false),
+                                                use_new_terminal: Some(false),
+                                                reevaluate_context: false,
+                                            }),
+                                            cx,
+                                        );
+                                    }
+                                })
+                        };
+                        let _ = task_id; // only used when we kept the dedicated Rerun button
+                        Some(
+                            h_flex()
+                                .gap(DynamicSpacing::Base02.rems(cx))
+                                .child(toggle_button)
+                                .child(
+                                    IconButton::new("task-clear", IconName::Trash)
+                                        .icon_size(IconSize::Small)
+                                        .tooltip(|_, cx| Tooltip::simple("Clear terminal", cx))
+                                        .on_click(move |_, window, cx| {
+                                            window.dispatch_action(Box::new(Clear), cx);
+                                        }),
+                                )
+                                .into_any_element(),
+                        )
+                    });
+
                 let focus_handle = pane.focus_handle(cx);
                 let right_children = h_flex()
                     .gap(DynamicSpacing::Base02.rems(cx))
@@ -227,7 +316,7 @@ impl TerminalPanel {
                     })
                     .into_any_element()
                     .into();
-                (None, right_children)
+                (task_left_children, right_children)
             });
         });
     }
@@ -694,7 +783,7 @@ impl TerminalPanel {
             .detach_and_log_err(cx);
     }
 
-    fn terminals_for_task(
+    pub fn terminals_for_task(
         &self,
         label: &str,
         cx: &mut App,

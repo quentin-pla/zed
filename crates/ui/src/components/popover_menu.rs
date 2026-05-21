@@ -96,6 +96,18 @@ impl<M: ManagedView> PopoverMenuHandle<M> {
             .is_some_and(|state| state.menu.borrow().as_ref().is_some())
     }
 
+    /// If the popover is currently open, rebuild its menu from the stored
+    /// builder. Useful when external state changes mid-display (e.g. a task
+    /// the menu surfaces a status icon for has started or stopped) and the
+    /// caller wants the menu to re-evaluate without the user dismissing and
+    /// reopening it. Effectively replaces the menu entity with a fresh one
+    /// built from the same closure.
+    pub fn rebuild(&self, window: &mut Window, cx: &mut App) {
+        if self.is_deployed() {
+            self.show(window, cx);
+        }
+    }
+
     pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
         self.0.borrow().as_ref().is_some_and(|state| {
             state
