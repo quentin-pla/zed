@@ -429,6 +429,7 @@ impl EditorElement {
         register_action(editor, window, Editor::show_completions);
         register_action(editor, window, Editor::show_word_completions);
         register_action(editor, window, Editor::toggle_code_actions);
+        register_action(editor, window, Editor::show_import_suggestions);
         register_action(editor, window, Editor::open_excerpts);
         register_action(editor, window, Editor::open_excerpts_in_split);
         register_action(editor, window, Editor::toggle_soft_wrap);

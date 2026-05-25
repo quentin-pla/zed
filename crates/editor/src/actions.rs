@@ -807,6 +807,8 @@ actions!(
         ShowEditPrediction,
         /// Shows signature help for the current function.
         ShowSignatureHelp,
+        /// Shows import suggestions for the word under the cursor (JS/TS files only).
+        ShowImportSuggestions,
         /// Shows word completions.
         ShowWordCompletions,
         /// Randomly shuffles selected lines.

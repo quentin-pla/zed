@@ -1651,4 +1651,10 @@
       "shift-tab": "git_graph::FocusPreviousTabStop",
     },
   },
+  {
+    "context": "Editor && (extension == ts || extension == tsx || extension == js || extension == jsx || extension == mjs || extension == mts)",
+    "bindings": {
+      "alt-enter": "editor::ShowImportSuggestions"
+    }
+  }
 ]

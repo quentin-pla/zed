@@ -61,6 +61,7 @@ pub mod test;
 mod clipboard;
 mod code_actions;
 mod completions;
+mod import_suggestions;
 mod config;
 mod diagnostics;
 mod edit_prediction;
