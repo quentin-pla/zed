@@ -10,10 +10,9 @@
       "Number" "String" "Boolean" "Symbol" "BigInt" "Proxy" "ArrayBuffer" "DataView")))
 
 ; Import identifier names — uniform color across default, named, alias, namespace
-; imports to match WebStorm JS.MODULE_NAME behavior. Type imports above remain
-; cyan via more-specific captures.
+; imports. Heuristics below override for hooks/known functions/types.
 (import_clause
-  (identifier) @variable.import)
+  (identifier) @namespace)
 
 (import_specifier
   name: (identifier) @variable.import)
@@ -22,7 +21,33 @@
   alias: (identifier) @variable.import)
 
 (namespace_import
-  (identifier) @variable.import)
+  (identifier) @namespace)
+
+; React hooks and known function-like imports — render as functions (blue).
+((import_specifier
+  name: (identifier) @function)
+  (#match? @function "^use[A-Z]"))
+
+((import_specifier
+  alias: (identifier) @function)
+  (#match? @function "^use[A-Z]"))
+
+((import_specifier
+  name: (identifier) @function)
+  (#match? @function "^(memo|forwardRef|createElement|createContext|createRef|render|lazy|reducer|effect|callback)$"))
+
+((import_specifier
+  alias: (identifier) @function)
+  (#match? @function "^(memo|forwardRef|createElement|createContext|createRef|render|lazy|reducer|effect|callback)$"))
+
+; PascalCase named imports — assume types/components.
+((import_specifier
+  name: (identifier) @type)
+  (#match? @type "^[A-Z][a-z]"))
+
+((import_specifier
+  alias: (identifier) @type)
+  (#match? @type "^[A-Z][a-z]"))
 
 ; Properties
 (property_identifier) @property
@@ -77,6 +102,67 @@
 ((member_expression
   object: (identifier) @type.module)
   (#match? @type.module "^[A-Z][a-z]"))
+
+; Re-assert import-specific captures AFTER the generic PascalCase →
+; @function capture so they win on tie-breaking precedence (tree-sitter:
+; later pattern wins when patterns match the same byte range).
+(import_clause
+  (identifier) @namespace)
+
+(namespace_import
+  (identifier) @namespace)
+
+((import_specifier
+  name: (identifier) @function)
+  (#match? @function "^use[A-Z]"))
+
+((import_specifier
+  alias: (identifier) @function)
+  (#match? @function "^use[A-Z]"))
+
+((import_specifier
+  name: (identifier) @function)
+  (#match? @function "^(memo|forwardRef|createElement|createContext|createRef|render|lazy|reducer|effect|callback)$"))
+
+((import_specifier
+  alias: (identifier) @function)
+  (#match? @function "^(memo|forwardRef|createElement|createContext|createRef|render|lazy|reducer|effect|callback)$"))
+
+((import_specifier
+  name: (identifier) @type)
+  (#match? @type "^[A-Z][a-z]"))
+
+((import_specifier
+  alias: (identifier) @type)
+  (#match? @type "^[A-Z][a-z]"))
+
+; "Module-shaped" PascalCase imports — render as @type.module.
+((import_specifier
+  name: (identifier) @type.module)
+  (#match? @type.module "(Module|Service|Util|Utils|Helper|Manager|Provider)$"))
+
+((import_specifier
+  alias: (identifier) @type.module)
+  (#match? @type.module "(Module|Service|Util|Utils|Helper|Manager|Provider)$"))
+
+; Scoped-package PascalCase imports → module/component references.
+((import_statement
+  (import_clause
+    (named_imports
+      (import_specifier
+        name: (identifier) @type.module)))
+  source: (string) @_src)
+  (#match? @type.module "^[A-Z][a-z]")
+  (#match? @_src "^[\"']@[a-z]"))
+
+((import_statement
+  (import_clause
+    (named_imports
+      (import_specifier
+        alias: (identifier) @type.module)))
+  source: (string) @_src)
+  (#match? @type.module "^[A-Z][a-z]")
+  (#match? @_src "^[\"']@[a-z]"))
 
 ; Function and method calls
 (call_expression

@@ -426,6 +426,16 @@
             "font_style": null,
             "font_weight": null
           },
+          "tag.component": {
+            "color": "#26BDA4FF",
+            "font_style": null,
+            "font_weight": null
+          },
+          "tag.component.jsx": {
+            "color": "#26BDA4FF",
+            "font_style": null,
+            "font_weight": null
+          },
           "text.literal": {
             "color": "#89ca78ff",
             "font_style": null,
@@ -462,9 +472,9 @@
             "font_weight": null
           },
           "variable.import": {
-            "color": "#e5c07bff",
+            "color": "#9876AAFF",
             "font_style": "italic",
-            "font_weight": null
+            "font_weight": 700
           },
           "variable.parameter": {
             "color": "#d19a66ff",
