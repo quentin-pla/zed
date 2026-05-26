@@ -1,6 +1,6 @@
 use crate::dock::{Dock, PanelButtons};
 use gpui::{Context, Entity, IntoElement, ParentElement, Render, Styled, Window, px};
-use ui::{Divider, DividerColor, prelude::*};
+use ui::prelude::*;
 
 pub struct ActivityBar {
     left: Entity<PanelButtons>,
@@ -41,15 +41,9 @@ impl Render for ActivityBar {
             .gap_2()
             .bg(cx.theme().colors().status_bar_background)
             .border_r_1()
-            .border_color(cx.theme().colors().border)
+            .border_color(cx.theme().colors().border_variant)
             .when(has_left, |this| this.child(self.left.clone()))
-            .when(has_left && (has_bottom || has_right), |this| {
-                this.child(Divider::horizontal().color(DividerColor::Border))
-            })
             .when(has_bottom, |this| this.child(self.bottom.clone()))
-            .when(has_bottom && has_right, |this| {
-                this.child(Divider::horizontal().color(DividerColor::Border))
-            })
             .when(has_right, |this| this.child(self.right.clone()))
     }
 }

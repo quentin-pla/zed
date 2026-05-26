@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use settings::{Settings, SettingsStore, TerminalDockPosition};
 use std::sync::Arc;
 use ui::{
-    ContextMenu, CountBadge, Divider, DividerColor, IconButton, Tooltip, prelude::*,
+    ContextMenu, CountBadge, IconButton, Tooltip, prelude::*,
     right_click_menu,
 };
 use util::ResultExt as _;
@@ -1100,6 +1100,7 @@ impl Render for Dock {
         let dispatch_context = Self::dispatch_context();
         if let Some(entry) = self.visible_entry() {
             let position = self.position;
+            let resize_handle_hover_color = cx.theme().colors().border_focused.opacity(0.3);
             let create_resize_handle = || {
                 let handle = div()
                     .id("resize-handle")
@@ -1127,7 +1128,8 @@ impl Render for Dock {
                             }
                         }),
                     )
-                    .occlude();
+                    .occlude()
+                    .hover(|style| style.bg(resize_handle_hover_color));
                 match self.position() {
                     DockPosition::Left => deferred(
                         handle
@@ -1166,7 +1168,7 @@ impl Render for Dock {
                 .focus_follows_mouse(self.focus_follows_mouse, cx)
                 .flex()
                 .bg(cx.theme().colors().panel_background)
-                .border_color(cx.theme().colors().border)
+                .border_color(cx.theme().colors().border_variant)
                 .overflow_hidden()
                 .map(|this| match self.position().axis() {
                     // Width and height are always set on the workspace wrapper in
@@ -1418,20 +1420,9 @@ impl Render for PanelButtons {
                     buttons.reverse();
                 }
 
-                let has_buttons = !buttons.is_empty();
-
                 h_flex()
                     .gap_1()
-                    .when(
-                        has_buttons
-                            && (dock.position == DockPosition::Bottom
-                                || dock.position == DockPosition::Right),
-                        |this| this.child(Divider::vertical().color(DividerColor::Border)),
-                    )
                     .children(buttons)
-                    .when(has_buttons && dock.position == DockPosition::Left, |this| {
-                        this.child(Divider::vertical().color(DividerColor::Border))
-                    })
                     .into_any_element()
             }
             PanelButtonsOrientation::Vertical => {

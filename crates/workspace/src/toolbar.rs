@@ -120,13 +120,11 @@ impl Render for Toolbar {
         v_flex()
             .group("toolbar")
             .relative()
-            .py(DynamicSpacing::Base06.rems(cx))
+            .py(DynamicSpacing::Base04.rems(cx))
             .px(DynamicSpacing::Base08.rems(cx))
             .when(has_left_items || has_right_items, |this| {
                 this.gap(DynamicSpacing::Base06.rems(cx))
             })
-            .border_b_1()
-            .border_color(cx.theme().colors().border_variant)
             .bg(cx.theme().colors().toolbar_background)
             .when(has_left_items || has_right_items, |this| {
                 this.child(
