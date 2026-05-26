@@ -9,6 +9,21 @@
       "RangeError" "SyntaxError" "ReferenceError" "EvalError" "URIError" "RegExp" "Function"
       "Number" "String" "Boolean" "Symbol" "BigInt" "Proxy" "ArrayBuffer" "DataView")))
 
+; Import identifier names — uniform color across default, named, alias, namespace
+; imports to match WebStorm JS.MODULE_NAME behavior. Type imports above remain
+; cyan via more-specific captures.
+(import_clause
+  (identifier) @variable.import)
+
+(import_specifier
+  name: (identifier) @variable.import)
+
+(import_specifier
+  alias: (identifier) @variable.import)
+
+(namespace_import
+  (identifier) @variable.import)
+
 ; Properties
 (property_identifier) @property
 
@@ -17,6 +32,51 @@
 (shorthand_property_identifier_pattern) @property
 
 (private_property_identifier) @property
+
+; Object-expression shorthand: `{foo}` is a variable reference, not a property
+(object
+  (shorthand_property_identifier) @variable)
+
+; Object destructure shorthand: `const {foo} = x` declares a variable
+(object_pattern
+  (shorthand_property_identifier_pattern) @variable)
+
+; PascalCase identifiers used as values (Dialog, AiSimilarityAccessModule, …)
+; — color them as functions/components, not as types. Type annotations still
+; win because type_identifier captures above are more specific.
+((identifier) @function
+  (#match? @function "^[A-Z][a-z]"))
+
+((shorthand_property_identifier) @function
+  (#match? @function "^[A-Z][a-z]"))
+
+((shorthand_property_identifier_pattern) @function
+  (#match? @function "^[A-Z][a-z]"))
+
+; PascalCase variable declarations (React component definitions) — use a
+; dedicated scope so the theme can render them as purple semibold like
+; WebStorm's semantic highlighting.
+((variable_declarator
+  name: (identifier) @function.declaration)
+  (#match? @function.declaration "^[A-Z][a-z]"))
+
+; React hook tuple destructure: `const [x, setX] = useFoo(...)` — the second
+; binding is the setter/dispatcher (function), the first is state (variable).
+((variable_declarator
+  name: (array_pattern
+    (identifier)
+    (identifier) @function)
+  value: (call_expression
+    function: (identifier) @_hook))
+  (#match? @_hook "^use"))
+
+
+; PascalCase identifier used as the object of a member access — module/namespace
+; reference, e.g. `AiSimilarityAccessModule.isAllowed(...)`. Render distinct from
+; React components passed as values.
+((member_expression
+  object: (identifier) @type.module)
+  (#match? @type.module "^[A-Z][a-z]"))
 
 ; Function and method calls
 (call_expression
@@ -164,7 +224,7 @@
 [
   (null)
   (undefined)
-] @constant.builtin
+] @keyword
 
 [
   (true)
@@ -358,19 +418,19 @@
   "@" @punctuation.special)
 
 (union_type
-  "|" @punctuation.special)
+  "|" @operator)
 
 (intersection_type
-  "&" @punctuation.special)
+  "&" @operator)
 
 (type_annotation
-  ":" @punctuation.special)
+  ":" @operator)
 
 (index_signature
-  ":" @punctuation.special)
+  ":" @operator)
 
 (type_predicate_annotation
-  ":" @punctuation.special)
+  ":" @operator)
 
 (public_field_definition
   "?" @punctuation.special)

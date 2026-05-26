@@ -4834,7 +4834,12 @@ impl BufferSnapshot {
             opens.dedup_by(|a, b| a.start == b.start && a.end == b.end);
             color_pairs.sort_by_key(|(_, close, _)| close.end);
 
-            let mut open_stack = Vec::new();
+            // Match WebStorm "Rainbow Brackets" behavior: the rainbow level for a
+            // bracket is the count of consecutive same-type enclosing opens
+            // immediately above it on the stack. A different-type enclosing
+            // bracket "resets" the level — so sibling pairs of different types
+            // both render at level 1, while same-type nesting climbs the palette.
+            let mut open_stack: Vec<Range<usize>> = Vec::new();
             let mut open_index = 0;
             for (open, close, index) in color_pairs {
                 while open_index < opens.len() && opens[open_index].start < close.start {
@@ -4843,7 +4848,16 @@ impl BufferSnapshot {
                 }
 
                 if open_stack.last() == Some(&open) {
-                    let depth_index = open_stack.len() - 1;
+                    let open_char = self.chars_at(open.start).next().unwrap_or(' ');
+                    let mut depth_index = 0;
+                    for below in open_stack[..open_stack.len() - 1].iter().rev() {
+                        let below_char = self.chars_at(below.start).next().unwrap_or(' ');
+                        if below_char == open_char {
+                            depth_index += 1;
+                        } else {
+                            break;
+                        }
+                    }
                     all_brackets[index].color_index = Some(depth_index);
                     open_stack.pop();
                 }
